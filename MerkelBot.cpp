@@ -259,13 +259,13 @@ void MerkelBot::gotoNextTimeframe()
 }
 
 /** function to estimate next likely value of a numerical array using linear regression*/
-double MerkelBot::linRegressionPrediction(std::vector<double>& priceHistory)
+long double MerkelBot::linRegressionPrediction(std::vector<long double>& priceHistory)
 {
     // storing size of the array
     int n = priceHistory.size();
     // temporary variables for the calculations
-    double sumX=0, sumY=0, upperTerm = 0, lowerTerm = 0;
-    double meanX, meanY, intercept, coeff;
+    long double sumX=0, sumY=0, upperTerm = 0, lowerTerm = 0;
+    long double meanX, meanY, intercept, coeff;
 
     try
     {
@@ -297,16 +297,16 @@ double MerkelBot::linRegressionPrediction(std::vector<double>& priceHistory)
 
     // returning prediction by doubling the time interval, e.g. 
     // if we have 5 data points, we predict price after 5 additional time frames
-    return intercept + coeff * (2 * n);
+    return intercept + coeff * (n + 10);
 }
 
 /** function to extract historical prices from a specific product*/
-std::vector<double> MerkelBot::getHistoricalPricesByProduct(std::string const product)
+std::vector<long double> MerkelBot::getHistoricalPricesByProduct(std::string const product)
 {
     // vector to store the historical values for a product
-    std::vector<double> productPriceHistory;
+    std::vector<long double> productPriceHistory;
     // iterating through the list of historical prices
-    for (std::map<std::string, double>& priceTimeSlice : avgHistoricalPrices)
+    for (std::map<std::string, long double>& priceTimeSlice : avgHistoricalPrices)
     {
         productPriceHistory.push_back(priceTimeSlice[product]);
     }
@@ -318,7 +318,7 @@ std::vector<double> MerkelBot::getHistoricalPricesByProduct(std::string const pr
 void MerkelBot::updatePricePrediction()
 {
    // vector to store historical prices for a product
-   std::vector<double> productPriceHistory;
+   std::vector<long double> productPriceHistory;
    for (std::string const& p : botProducts)
    {
        try
@@ -342,7 +342,7 @@ void MerkelBot::placeBotBids()
         std::vector<std::string> currs = CSVReader::tokenise(p, '/');
         
         // initializing bid price above current bidding, at min ask
-        bidPrice = minAskPrices[p];
+        bidPrice = avgCurrentPrices[p];
         // initialing amount with the standard order amount
         buyAmount = botAssets.standardOrderAmount[currs[0]];
         // calculate sell amount
@@ -383,10 +383,14 @@ void MerkelBot::placeBotBids()
 /** analyze current market and place bot asks */ 
 void MerkelBot::placeBotAsks()
 {
-    double askPrice, buyAmount, sellAmount;
+    long double askPrice, buyAmount, sellAmount;
     for (std::string const& p : botProducts)
     {
         std::vector<std::string> currs = CSVReader::tokenise(p, '/');
+
+        // no trading happening on this product
+        if ( (minAskPrices[p] == 0) && (maxBidPrices[p] == 0) )
+            continue;
         
         // initializing ask price below current ask, at max bid
         askPrice = maxBidPrices[p];
@@ -397,7 +401,7 @@ void MerkelBot::placeBotAsks()
 
         // check if the price prediction is at leasr 0.1% lower than current market price
         // if we expect the market price to decrease, we should sell at the highest price we can get now
-        if (pricePrediction[p] < avgCurrentPrices[p] && sellAmount > 0)
+        if (pricePrediction[p] < 0.999 * avgCurrentPrices[p])
         {
             try
             {

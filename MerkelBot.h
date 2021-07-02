@@ -27,24 +27,24 @@ class MerkelBot
         std::vector<OrderBookEntry> getLiveAsksForProduct(std::string const product);
 
         // map variables to store current market statistics
-        std::map<std::string, double> maxBidPrices;
-        std::map<std::string, double> minAskPrices;
-        std::map<std::string, double> avgCurrentPrices;
+        std::map<std::string, long double> maxBidPrices;
+        std::map<std::string, long double> minAskPrices;
+        std::map<std::string, long double> avgCurrentPrices;
 
         // a vector to store historical prices for all timestamps up to current time 
-        std::vector<std::map<std::string, double> > avgHistoricalPrices;
+        std::vector<std::map<std::string, long double> > avgHistoricalPrices;
 
         /** function to extract historical prices for a specific product*/
-        std::vector<double> getHistoricalPricesByProduct(std::string const product);
+        std::vector<long double> getHistoricalPricesByProduct(std::string const product);
 
         // map to store current price prediction for each product
-        std::map<std::string, double> pricePrediction;
+        std::map<std::string, long double> pricePrediction;
 
         // map to store impact of sales to assets
         std::map<std::string, double> salesImpactOnAssets;
 
         /** function to estimate next likely value of a numerical array using linear regression*/
-        static double linRegressionPrediction(std::vector<double>& priceHistory);
+        static long double linRegressionPrediction(std::vector<long double>& priceHistory);
 
         /** update price prediction based on the historical and the most recent market prices*/
         void updatePricePrediction();

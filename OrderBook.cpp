@@ -266,7 +266,7 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::vector<OrderBookEntr
     // std::cout << "Matching section of the function at " << timestamp << " and product " << product << " ran in " << duration3.count() << " microseconds" << std::endl;
 
     // uncomment the line below to output measurements to console
-    // std::cout << "Total running time at " << timestamp << " and product " << product << ": " << duration1.count() + duration2.count() + duration3.count() << " microseconds" << std::endl;
+    std::cout << "Total running time at " << timestamp << " and product " << product << ": " << duration1.count() + duration2.count() + duration3.count() << " microseconds" << std::endl;
 
     return sales;
 }
