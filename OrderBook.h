@@ -8,26 +8,29 @@
 class OrderBook
 {
     public:
-        /** Construct, reading a CSV data file */
+        /** Construct, reading a CSV data file and returning a vector of order book entries*/
         OrderBook(std::string filename);
         
         /** Return vector of all known products in the dataset*/
         std::vector<std::string> getKnownProducts();
         
-        /** Return the earliest time in the orderbook */
+        /** Return the earliest time in the orderbook by passing a vector of timestamps */
         std::string getEarliestTime(std::vector<std::string>& timestamps);        
         
-        /** Return the latest time in the orderbook */
+        /** Return the latest time in the orderbook by passing a vector of timestamps  */
         std::string getLatestTime(std::vector<std::string>& timestamps);
         
         /** Return the next time after the sent time in the orderbook.
-         * If there is no next timestamp, wraps around to the start*/
+         * If there is no next timestamp, wraps around to the start*
+         * Takes a timestamp as an input and a vector of timestamps as input*/
         std::string getNextTime(const std::string& timestamp, std::vector<std::string>& timestampsList);
 
         /** Insert order to order book */
         void insertOrder(OrderBookEntry& order);
 
-        /** matching engine */
+        /** matching engine, takes a vector of orders a product and a timestamps as inputs *
+         * returns a list of orderbook entries representing executed sales*
+         * also records unfulfilled bot orders to a vector of active orders*/
         std::vector<OrderBookEntry> matchAsksToBids(std::vector<OrderBookEntry>& currentOrders, 
                                                     std::string product, 
                                                     std::string timestamp);
