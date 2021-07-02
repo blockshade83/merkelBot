@@ -2,6 +2,12 @@
 #include <iostream>
 #include <fstream>
 
+Assets::Assets()
+{
+
+}
+
+/** add amounts to wallet */
 void Assets::addFunds()
 {
     standardWallet.insertCurrency("BTC", 10);
@@ -14,6 +20,7 @@ void Assets::addFunds()
     updateTotalAssets("DOGE");
 }
 
+/** set standard order amount */
 void Assets::setStandardOrderAmounts()
 {
     // initializing standard amounts for orders

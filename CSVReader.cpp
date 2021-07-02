@@ -2,6 +2,7 @@
 #include <iostream>
 #include "OrderBookEntry.h"
 #include <fstream>
+#include <map>
 
 CSVReader::CSVReader()
 {
@@ -10,6 +11,7 @@ CSVReader::CSVReader()
 
 std::vector<OrderBookEntry> CSVReader::readCSV(std::string csvFilename)
 {
+    // map of timestamps to vectors of all orders
     std::vector<OrderBookEntry> entries;
 
     std::ifstream csvFile{csvFilename};

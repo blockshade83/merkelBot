@@ -22,11 +22,6 @@ class MerkelBot
         // vector with all products on the exchange 
         std::vector<std::string> botProducts = fullOrderBook.getKnownProducts();
 
-        std::vector<std::string> timestamps = fullOrderBook.getTimestamps();
-
-        // variable to store orders valid for current period only
-        // std::vector<OrderBookEntry> liveOrders;
-
         // functions to extract bids and asks by product
         std::vector<OrderBookEntry> getLiveBidsForProduct(std::string const product);
         std::vector<OrderBookEntry> getLiveAsksForProduct(std::string const product);
@@ -39,11 +34,14 @@ class MerkelBot
         // a vector to store historical prices for all timestamps up to current time 
         std::vector<std::map<std::string, double> > avgHistoricalPrices;
 
-        /** function to extract historical prices from a specific product*/
+        /** function to extract historical prices for a specific product*/
         std::vector<double> getHistoricalPricesByProduct(std::string const product);
 
-        /** store current price prediction for each product*/
+        // map to store current price prediction for each product
         std::map<std::string, double> pricePrediction;
+
+        // map to store impact of sales to assets
+        std::map<std::string, double> salesImpactOnAssets;
 
         /** function to estimate next likely value of a numerical array using linear regression*/
         static double linRegressionPrediction(std::vector<double>& priceHistory);
@@ -67,20 +65,19 @@ class MerkelBot
         void placeBotAsks();
 
         /** analyze current market and cancel carryover orders where needed */ 
-        void cancelBotOrders(std::string& timestamp);
+        void cancelBotOrders();
 
         /** add bot order to the order log */
-        void logBotOrder(OrderBookEntry& order, std::ofstream& logFile);
+        static void logBotOrder(OrderBookEntry& order, std::ofstream& logFile);
 
         /** add sale to the sale log*/
-        void logBotSale(OrderBookEntry& sale);
-
-        /** update the assets
-         * assumes the order was made by the owner of the wallet */
-        void processSale(OrderBookEntry& sale, Wallet& standard, Wallet& reserved);
+        void logBotSale(OrderBookEntry& sale, std::ofstream& logFile);
 
         /** log total value of assets in USD equivalent */
         void logTotalAssetsUSD(std::ofstream& logFile);
+
+        /** log impact of cumulative sales to assets log - assists with checks */
+        void logSalesImpact(std::ofstream& logFile);
 
         // class variables to store current time, earliest time and latest time for the order book
         std::string currentTime;

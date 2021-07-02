@@ -5,11 +5,31 @@
 #include <iostream>
 #include <chrono>
 
-/** construct, reading a CSV data file */
+/** construct, reading a CSV data file and extracting the data */
 OrderBook::OrderBook(std::string filename)
 {
     orders = CSVReader::readCSV(filename);
     std::sort(orders.begin(), orders.end(), OrderBookEntry::compareByTimestamp);
+    extractTimestampData();
+}
+
+/** Function to extract orders data and place it into a map data structure. Also extracts the timestamps in the dataset*/
+void OrderBook::extractTimestampData()
+{  
+    std::map<std::string,bool> timestampsMap;
+
+    for (OrderBookEntry& e : orders)
+    {
+        timestampsMap[e.timestamp] = true;
+        // pushing orders to new data structure
+        ordersByTimestamp[e.timestamp].push_back(e);
+    }
+
+    // now flatten the map of timestamps to a vector of strings
+    for (auto const& e : timestampsMap)
+    {
+        timestamps.push_back(e.first);
+    }
 }
 
 /** return vector of all known products in the dataset */
@@ -32,28 +52,7 @@ std::vector<std::string> OrderBook::getKnownProducts()
     return products;
 }
 
-/** return vector of all known products in the dataset */
-std::vector<std::string> OrderBook::getTimestamps()
-{  
-    std::vector<std::string> timestamps;
-    std::map<std::string,bool> timestampsMap;
-
-    for (OrderBookEntry& e : orders)
-    {
-        timestampsMap[e.timestamp] = true;
-        ordersByTimestamp[e.timestamp].push_back(e);
-    }
-
-    // now flatten the map of timestamps to a vector of strings
-    for (auto const& e : timestampsMap)
-    {
-        timestamps.push_back(e.first);
-    }
-
-    return timestamps;
-}
 /** return vector of orders according to the filters applied */
-// added a vector of order book entries as an input parameter to the function
 std::vector<OrderBookEntry> OrderBook::getOrders(std::vector<OrderBookEntry>& ordersList,
                                       OrderBookType type, 
                                       std::string product,
@@ -73,49 +72,16 @@ std::vector<OrderBookEntry> OrderBook::getOrders(std::vector<OrderBookEntry>& or
     return orders_sub;
 }
 
-/** function to extract orders for a specific timestamp*/
-std::vector<OrderBookEntry> OrderBook::getLiveOrders(std::string& timestamp)
-{
-    // define vector of orders to store output
-    std::vector<OrderBookEntry> orders_sub;
-
-    // iterate through the entire order book
-    for (OrderBookEntry& e : orders)
-    {   
-        // pushing entries for the specific timeframe, excluding cancelled orders
-        if (e.timestamp == timestamp && e.orderStatus != "cancelled")
-        {
-            orders_sub.push_back(e);
-        }
-    }
-
-    return orders_sub;
-}
-
-/** return the price of the highest bid/ask in the sent set */ 
-double OrderBook::getHighPrice(std::vector<OrderBookEntry>& orders)
-{
-    double max = orders[0].price;
-    for (OrderBookEntry& e : orders)
-    {
-        if (e.price > max) max = e.price;
-    }
-    return max;
-}
-
-/** return the price of the lowest bid/ask in the sent set */
-double OrderBook::getLowPrice(std::vector<OrderBookEntry>& orders)
-{
-    double min = orders[0].price;
-    for (OrderBookEntry& e : orders)
-    {
-        if (e.price < min) min = e.price;
-    }
-    return min;
-}
-
+/** Return the earliest time in the orderbook */
 std::string OrderBook::getEarliestTime(std::vector<std::string>& timestamps)
 {
+    // avoiding erors caused by empty vectors
+    if (timestamps.size() == 0)
+    {
+        std::cout << "OrderBook::getEarliestTime Bad timestamps input supplied!" << std::endl;
+        return "";
+    }
+
     std::string earliest_timestamp = timestamps[0];
 
     for (std::string& value : timestamps)
@@ -126,8 +92,16 @@ std::string OrderBook::getEarliestTime(std::vector<std::string>& timestamps)
     return earliest_timestamp;
 }
 
+/** Return the latest time in the orderbook */
 std::string OrderBook::getLatestTime(std::vector<std::string>& timestamps)
 {
+    // avoiding erors caused by empty vectors
+    if (timestamps.size() == 0) 
+    {
+        std::cout << "OrderBook::getLatestTime Bad timestamps input supplied!" << std::endl;
+        return "";
+    }
+
     std::string latest_timestamp = timestamps[0];
 
     for (std::string& value : timestamps)
@@ -155,44 +129,13 @@ std::string OrderBook::getNextTime(const std::string& timestamp, std::vector<std
     return next_timestamp;
 }
 
+/** Insert order to order book */
 void OrderBook::insertOrder(OrderBookEntry& order)
 {
     ordersByTimestamp[order.timestamp].push_back(order);
-    // sorting no longer required
-    // std::sort(orders.begin(), orders.end(), OrderBookEntry::compareByTimestamp);
 }
 
-/** Return the money ratio for a product in the set at a specific time
- * Money ratio = Positive Money Flow / Negative Money Flow
- * https://docs.anychart.com/Stock_Charts/Technical_Indicators/Mathematical_Description
- * normally calculated with all executed transactions in a specific period
- * adapting to the context of the available data */
-double OrderBook::getMoneyRatio(const std::string& product,
-                                const std::string& timestamp)
-{
-    // positive Money Flow is the total value of bids for a product (bid price * amount)
-    // negative Money Flow is the total value of asks for a product (ask price * amount)
-    double positiveMoneyFlow = 0;
-    double negativeMoneyFlow = 0;
-
-    // iterating through the orderbook
-    for (OrderBookEntry& e : orders)
-    {
-        // choosing only the entries that meet the filtering conditions supplied in the function parameters
-        if (e.timestamp == timestamp && e.product == product)
-        {
-            // incrementing the money flow variables with the value of bids/asks
-            if(e.orderType == OrderBookType::bid) positiveMoneyFlow += e.price * e.amount;
-            if(e.orderType == OrderBookType::ask) negativeMoneyFlow += e.price * e.amount;
-        }
-    }
-    // avoiding 0 division
-    if (negativeMoneyFlow == 0) return 0;
-    // 0 division avoided, applying formula for the money ratio
-    return positiveMoneyFlow / negativeMoneyFlow;
-}
-
-// added list of orders as a function parameter
+/** matching engine */
 std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::vector<OrderBookEntry>& currentOrders, 
                                                        std::string product, 
                                                        std::string timestamp)
@@ -212,7 +155,7 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::vector<OrderBookEntr
     auto duration1 = std::chrono::duration_cast<std::chrono::microseconds>(stop1 - start1);
 
     // uncomment the line below to output measurements to console
-    std::cout << "Extraction section of the function at " << timestamp << " and product " << product << " ran in " << duration1.count() << " microseconds" << std::endl;
+    // std::cout << "Extraction section of the function at " << timestamp << " and product " << product << " ran in " << duration1.count() << " microseconds" << std::endl;
 
     // starting high resolution clock to measure program running time
     auto start2 = std::chrono::high_resolution_clock::now();
@@ -328,6 +271,7 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::vector<OrderBookEntr
     return sales;
 }
 
+/** transfer active user orders from one timestamp to the next */
 void OrderBook::transferActiveOrders(std::string prevTimestamp, std::string nextTimestamp)
 {
     for (OrderBookEntry& order : activeUserOrders)
@@ -336,14 +280,9 @@ void OrderBook::transferActiveOrders(std::string prevTimestamp, std::string next
         {
             order.timestamp = nextTimestamp;
             order.orderStatus = "carryover";
-            
-            // avoiding the use of insertOrder, which would sort the full order book after each entry
-            ordersByTimestamp[order.timestamp].push_back(order);
+            insertOrder(order);
         }
     }
-    // no need to sort
-    // std::sort(orders.begin(), orders.end(), OrderBookEntry::compareByTimestamp);
-
     // empty the list of active user orders
     activeUserOrders.clear();
 }

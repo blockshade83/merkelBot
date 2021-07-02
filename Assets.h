@@ -7,6 +7,7 @@
 class Assets
 {
     public:
+        Assets();
         Wallet standardWallet;
         Wallet reservedWallet;
         Wallet totalAssets;

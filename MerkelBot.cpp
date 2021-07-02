@@ -13,13 +13,12 @@ void MerkelBot::init()
     // starting high resolution clock to measure program running time
     auto start = std::chrono::high_resolution_clock::now();
 
-    timestamps = fullOrderBook.getTimestamps();
-    currentTime = fullOrderBook.getEarliestTime(timestamps);
-
+    // extract current timestamp from order book
+    currentTime = fullOrderBook.getEarliestTime(fullOrderBook.timestamps);
     // extracting earliest timestamp in a separate variable as we will be updating currentTime
-    earliestTimestamp = fullOrderBook.getEarliestTime(timestamps);
+    earliestTimestamp = fullOrderBook.getEarliestTime(fullOrderBook.timestamps);
     // extracting latest timestamp as well to know when to stop
-    latestTimestamp = fullOrderBook.getLatestTime(timestamps);
+    latestTimestamp = fullOrderBook.getLatestTime(fullOrderBook.timestamps);
 
     // Assign file to filestream object for logging bot assets
     botAssetsLog.open("BotAssetsLog.txt");
@@ -60,11 +59,11 @@ void MerkelBot::init()
 
         // writing to assets log
         botAssets.logAssets(botAssetsLog);
-
         logTotalAssetsUSD(botAssetsLog);
+        logSalesImpact(botAssetsLog);     
     } 
 
-    // recording orders for latestTimestamp but excluding gotoNextTimeframe();
+    // process operations for last timestamp
     processTimeframe();
     // writing to assets log
     botAssetsLog << "Timestamp: " << currentTime << std::endl;
@@ -85,9 +84,6 @@ void MerkelBot::init()
 /** function to execute all actions, including bot decisions for current time*/
 void MerkelBot::processTimeframe()
 {
-    // extracting orders for current timeframe
-    // liveOrders = fullOrderBook.getLiveOrders(currentTime);
-
     // getting current market prices
     getMarketPrices();
     // adding most recent prices to historical prices
@@ -101,15 +97,12 @@ void MerkelBot::processTimeframe()
         updatePricePrediction();
 
         // cancelling orders from previous periods if applicable
-        cancelBotOrders(currentTime);
+        cancelBotOrders();
 
         // placing bot asks and bids
         placeBotAsks();
         placeBotBids();
     }
-
-    // re-extracting orders for current timeframe to include updates (order cancellation, asks, bids)
-    // liveOrders = fullOrderBook.getLiveOrders(currentTime);
     
     // iterating through all live orders to record carryover orders to the logs
     for (OrderBookEntry& order : fullOrderBook.ordersByTimestamp[currentTime])
@@ -241,9 +234,7 @@ void MerkelBot::gotoNextTimeframe()
     for (std::string& p : botProducts)
     {
         // matching asks to bids and generating sales for current time
-        std::vector<OrderBookEntry> sales = fullOrderBook.matchAsksToBids(fullOrderBook.ordersByTimestamp[currentTime], 
-                                                                          p, 
-                                                                          currentTime);
+        std::vector<OrderBookEntry> sales = fullOrderBook.matchAsksToBids(fullOrderBook.ordersByTimestamp[currentTime], p, currentTime);
 
         // iterating through the list of sales
         for (OrderBookEntry& sale: sales)
@@ -251,14 +242,14 @@ void MerkelBot::gotoNextTimeframe()
             // updating sale logs and wallets for the bot
             if (sale.username == "botuser")
             {
-                logBotSale(sale);
+                logBotSale(sale, botSalesLog);
                 botAssets.processSale(sale);
             }
         }
     }
 
     // storing next timeframe
-    std::string nextTime = fullOrderBook.getNextTime(currentTime, timestamps);
+    std::string nextTime = fullOrderBook.getNextTime(currentTime, fullOrderBook.timestamps);
 
     // transferring unfulfilled bot orders from current time to the next time
     fullOrderBook.transferActiveOrders(currentTime, nextTime);
@@ -437,10 +428,10 @@ void MerkelBot::placeBotAsks()
 }
 
 /** analyze current market and cancel carryover orders where needed */ 
-void MerkelBot::cancelBotOrders(std::string& timestamp)
+void MerkelBot::cancelBotOrders()
 {
     std::vector<std::string> currs;
-    for (OrderBookEntry& order : fullOrderBook.ordersByTimestamp[timestamp])
+    for (OrderBookEntry& order : fullOrderBook.ordersByTimestamp[currentTime])
     {
         if (order.orderStatus == "carryover" && order.username == "botuser")
         {
@@ -499,35 +490,44 @@ void MerkelBot::logBotOrder(OrderBookEntry& order, std::ofstream& logFile)
 }
 
 /** add sale to the sale log*/
-void MerkelBot::logBotSale(OrderBookEntry& sale)
+void MerkelBot::logBotSale(OrderBookEntry& sale, std::ofstream& logFile)
 {
     std::vector<std::string> currs = CSVReader::tokenise(sale.product, '/');
 
     // log sale
-    botSalesLog << currentTime << ",";
-    botSalesLog << sale.product << ",";
-    botSalesLog << sale.price << ",";
+    logFile << currentTime << ",";
+    logFile << sale.product << ",";
+    logFile << sale.price << ",";
     // add corresponding amounts and sale type
     if (sale.orderType == OrderBookType::bidsale)
     {
-        botSalesLog << "bidsale,";
-        botSalesLog << std::to_string(sale.amount) << ",";
-        botSalesLog << currs[0] << ",";
-        botSalesLog << std::to_string(-sale.amount * sale.price);
+        logFile << "bidsale,";
+        logFile << std::to_string(sale.amount) << ",";
+        logFile << currs[0] << ",";
+        logFile << std::to_string(-sale.amount * sale.price);
+
+        salesImpactOnAssets[currs[0]] += sale.amount;
+        salesImpactOnAssets[currs[1]] += -sale.amount * sale.price;
     }
+
     if (sale.orderType == OrderBookType::asksale)
     {
-        botSalesLog << "asksale,";
-        botSalesLog << std::to_string(-sale.amount) << ",";
-        botSalesLog << currs[0] << ",";
-        botSalesLog << std::to_string(sale.amount * sale.price);
+        logFile << "asksale,";
+        logFile << std::to_string(-sale.amount) << ",";
+        logFile << currs[0] << ",";
+        logFile << std::to_string(sale.amount * sale.price);
+
+        salesImpactOnAssets[currs[0]] += -sale.amount;
+        salesImpactOnAssets[currs[1]] += sale.amount * sale.price;        
     }
-    botSalesLog << "," << currs[1] << ",";
-    botSalesLog << maxBidPrices[sale.product] << ",";
-    botSalesLog << minAskPrices[sale.product] << ",";
-    botSalesLog << avgCurrentPrices[sale.product] << std::endl;
+
+    logFile << "," << currs[1] << ",";
+    logFile << maxBidPrices[sale.product] << ",";
+    logFile << minAskPrices[sale.product] << ",";
+    logFile << avgCurrentPrices[sale.product] << std::endl;
 }
 
+/** log total value of assets in USD equivalent */
 void MerkelBot::logTotalAssetsUSD(std::ofstream& logFile)
 {
     double totalAssetsUSD = 0;
@@ -554,4 +554,18 @@ void MerkelBot::logTotalAssetsUSD(std::ofstream& logFile)
     logFile << "Total assets in USD equivalent as on " << currentTime;
     logFile << ": " << "USD " << totalAssetsUSD << std::endl;
     logFile << "===================================" << std::endl;
+}
+
+/** log impact of cumulative sales to assets log - assists with checks */
+void MerkelBot::logSalesImpact(std::ofstream& logFile)
+{
+    logFile << "Impact of cumulative sales on assets as per sales log: " << std::endl;
+    std::string s = "";
+    for (std::pair<std::string, double> pair : salesImpactOnAssets)
+    {
+        std::string currency = pair.first;
+        double amount = pair.second;
+        s += currency + " : " + std::to_string(amount) + "\n";
+    }
+    logFile << s << std::endl;  
 }
