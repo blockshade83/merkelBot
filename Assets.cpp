@@ -1,6 +1,4 @@
 #include "Assets.h"
-#include <iostream>
-#include <fstream>
 
 Assets::Assets()
 {
@@ -24,10 +22,10 @@ void Assets::addFunds()
 void Assets::setStandardOrderAmounts()
 {
     // initializing standard amounts for orders
-    standardOrderAmount["BTC"] = 0.10 * standardWallet.currencies["BTC"];
-    standardOrderAmount["ETH"] = 0.10 * standardWallet.currencies["ETH"];
-    standardOrderAmount["USDT"] = 0.10 * standardWallet.currencies["USDT"];
-    standardOrderAmount["DOGE"] = 0.10 * standardWallet.currencies["DOGE"];
+    standardOrderAmount["BTC"] = 0.05 * standardWallet.currencies["BTC"];
+    standardOrderAmount["ETH"] = 0.05 * standardWallet.currencies["ETH"];
+    standardOrderAmount["USDT"] = 0.05 * standardWallet.currencies["USDT"];
+    standardOrderAmount["DOGE"] = 0.05 * standardWallet.currencies["DOGE"];
 }
 
 /** update the contents of the wallets after processing a sale */

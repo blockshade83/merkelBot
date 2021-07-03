@@ -1,9 +1,13 @@
 #include "Wallet.h"
 #include "OrderBook.h"
 #include "OrderBookEntry.h"
+#include "CSVReader.h"
 #include "Assets.h"
 #include <vector>
 #include <fstream>
+#include <iostream>
+#include <chrono>
+#include <sstream>
 
 class MerkelBot
 {
@@ -16,11 +20,8 @@ class MerkelBot
         // variable to store and process bot assets
         Assets botAssets;
 
-        // read order book from file
-        OrderBook fullOrderBook{"20200317.csv"};
-
-        // vector with all products on the exchange 
-        std::vector<std::string> botProducts = fullOrderBook.getKnownProducts();
+        // store order book data from file
+        OrderBook fullOrderBook;
 
         // functions to extract bids and asks by product
         std::vector<OrderBookEntry> getLiveBidsForProduct(std::string const product);
@@ -53,10 +54,10 @@ class MerkelBot
         void getMarketPrices();
 
         /** function to execute all actions, including bot decisions for current time*/
-        void processTimeframe();
+        void processBotActions();
 
-        /** move to the next timeframe */
-        void gotoNextTimeframe();
+        /** executing and logging sales */
+        void runMarketSales();
 
         /** analyze current market and place bot bids */ 
         void placeBotBids();
@@ -78,6 +79,12 @@ class MerkelBot
 
         /** log impact of cumulative sales to assets log - assists with checks */
         void logSalesImpact(std::ofstream& logFile);
+
+        /** vectors to store all timestamps and products */
+        std::vector<std::string> allTimestamps;
+        std::vector<std::string> allProducts;
+
+        std::map<std::string,std::vector<OrderBookEntry> > orders;
 
         // class variables to store current time, earliest time and latest time for the order book
         std::string currentTime;

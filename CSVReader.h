@@ -3,6 +3,10 @@
 #include "OrderBookEntry.h"
 #include <vector>
 #include <string>
+#include "OrderBook.h"
+#include <iostream>
+#include <fstream>
+#include <map>
 
 class CSVReader
 {
@@ -13,7 +17,7 @@ class CSVReader
         * lines like:
         * 2020/03/17 17:01:24.884492,ETH/BTC,bid,0.02187305,6.85567013
         */
-        static std::vector<OrderBookEntry> readCSV(std::string csvFile);
+        OrderBook readCSV(std::string csvFile);
         static std::vector<std::string> tokenise(std::string csvLine, char separator);
         static OrderBookEntry stringsToOBE(std::string priceString,
                                            std::string amountString,

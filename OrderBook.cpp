@@ -1,55 +1,9 @@
 #include "OrderBook.h"
-#include "CSVReader.h"
-#include <map> // C++ equivalent of Python dictionary
-#include <algorithm>
-#include <iostream>
-#include <chrono>
 
-/** construct, reading a CSV data file and extracting the data */
-OrderBook::OrderBook(std::string filename)
+/** constructor */
+OrderBook::OrderBook()
 {
-    orders = CSVReader::readCSV(filename);
-    std::sort(orders.begin(), orders.end(), OrderBookEntry::compareByTimestamp);
-    extractTimestampData();
-}
 
-/** Function to extract orders data and place it into a map data structure. Also extracts the timestamps in the dataset*/
-void OrderBook::extractTimestampData()
-{  
-    std::map<std::string,bool> timestampsMap;
-
-    for (OrderBookEntry& e : orders)
-    {
-        timestampsMap[e.timestamp] = true;
-        // pushing orders to new data structure
-        ordersByTimestamp[e.timestamp].push_back(e);
-    }
-
-    // now flatten the map of timestamps to a vector of strings
-    for (auto const& e : timestampsMap)
-    {
-        timestamps.push_back(e.first);
-    }
-}
-
-/** return vector of all known products in the dataset */
-std::vector<std::string> OrderBook::getKnownProducts()
-{  
-    std::vector<std::string> products;
-    std::map<std::string,bool> prodMap;
-
-    for (OrderBookEntry& e : orders)
-    {
-        prodMap[e.product] = true;
-    }
-
-    // now flatten the map of products to a vector of strings
-    for (auto const& e : prodMap)
-    {
-        products.push_back(e.first);
-    }
-
-    return products;
 }
 
 /** return vector of orders according to the filters applied */
@@ -70,69 +24,6 @@ std::vector<OrderBookEntry> OrderBook::getOrders(std::vector<OrderBookEntry>& or
         }
     }
     return orders_sub;
-}
-
-/** Return the earliest time in the orderbook */
-std::string OrderBook::getEarliestTime(std::vector<std::string>& timestamps)
-{
-    // avoiding erors caused by empty vectors
-    if (timestamps.size() == 0)
-    {
-        std::cout << "OrderBook::getEarliestTime Bad timestamps input supplied!" << std::endl;
-        return "";
-    }
-
-    std::string earliest_timestamp = timestamps[0];
-
-    for (std::string& value : timestamps)
-    {
-        if (value < earliest_timestamp) earliest_timestamp = value;
-    }
-
-    return earliest_timestamp;
-}
-
-/** Return the latest time in the orderbook */
-std::string OrderBook::getLatestTime(std::vector<std::string>& timestamps)
-{
-    // avoiding erors caused by empty vectors
-    if (timestamps.size() == 0) 
-    {
-        std::cout << "OrderBook::getLatestTime Bad timestamps input supplied!" << std::endl;
-        return "";
-    }
-
-    std::string latest_timestamp = timestamps[0];
-
-    for (std::string& value : timestamps)
-    {
-        if (value > latest_timestamp) latest_timestamp = value;
-    }
-
-    return latest_timestamp;
-}
-
-std::string OrderBook::getNextTime(const std::string& timestamp, std::vector<std::string>& timestampsList)
-{
-    std::string next_timestamp = "";
-
-    for (std::string& value : timestampsList)
-    {
-        if (value > timestamp)
-        {
-            next_timestamp = value;
-            break;
-        }
-    }
-    if (next_timestamp == "") next_timestamp = getEarliestTime(timestampsList);
-
-    return next_timestamp;
-}
-
-/** Insert order to order book */
-void OrderBook::insertOrder(OrderBookEntry& order)
-{
-    ordersByTimestamp[order.timestamp].push_back(order);
 }
 
 /** matching engine */
@@ -237,6 +128,13 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::vector<OrderBookEntr
                     bid.amount = 0;
                 }
             }
+
+            // bids are sorted in a descending order
+            // if we have reached a price below the ask price, we can exit the for loop
+            if (bid.price < ask.price)
+            {
+                break;
+            }
         } // end bid for loop
 
         // if the ask is placed by the bot and has not been fully processed, we add it to the list of active orders
@@ -270,20 +168,3 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::vector<OrderBookEntr
 
     return sales;
 }
-
-/** transfer active user orders from one timestamp to the next */
-void OrderBook::transferActiveOrders(std::string prevTimestamp, std::string nextTimestamp)
-{
-    for (OrderBookEntry& order : activeUserOrders)
-    {
-        if (order.timestamp == prevTimestamp)
-        {
-            order.timestamp = nextTimestamp;
-            order.orderStatus = "carryover";
-            insertOrder(order);
-        }
-    }
-    // empty the list of active user orders
-    activeUserOrders.clear();
-}
-

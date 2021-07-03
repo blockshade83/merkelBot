@@ -1,6 +1,4 @@
 #include "Wallet.h"
-#include <iostream>
-#include "CSVReader.h"
 
 Wallet::Wallet()
 {

@@ -3,6 +3,8 @@
 #include "Wallet.h"
 #include "CSVReader.h"
 #include "OrderBookEntry.h"
+#include <iostream>
+#include <fstream>
 
 class Assets
 {

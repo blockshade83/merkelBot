@@ -1,7 +1,4 @@
 #include "MerkelBot.h"
-#include <iostream>
-#include <fstream>
-#include <chrono>
 
 MerkelBot::MerkelBot()
 {
@@ -10,15 +7,24 @@ MerkelBot::MerkelBot()
 
 void MerkelBot::init() 
 {
-    // starting high resolution clock to measure program running time
-    auto start = std::chrono::high_resolution_clock::now();
+    // initialize CSV Reader object
+    CSVReader csvReader{};
 
-    // extract current timestamp from order book
-    currentTime = fullOrderBook.getEarliestTime(fullOrderBook.timestamps);
-    // extracting earliest timestamp in a separate variable as we will be updating currentTime
-    earliestTimestamp = fullOrderBook.getEarliestTime(fullOrderBook.timestamps);
-    // extracting latest timestamp as well to know when to stop
-    latestTimestamp = fullOrderBook.getLatestTime(fullOrderBook.timestamps);
+    // read order book from the file
+    fullOrderBook = csvReader.readCSV("20200317.csv");
+
+    // copy vector of timestamps to class variable
+    for (auto const& e : fullOrderBook.timestamps)
+    {
+        allTimestamps.push_back(e);
+        orders[e] = fullOrderBook.ordersByTimestamp[e];
+    }
+
+    // copy vectof of products to class variable
+    for (auto const& e : fullOrderBook.products)
+    {
+        allProducts.push_back(e);
+    }
 
     // Assign file to filestream object for logging bot assets
     botAssetsLog.open("BotAssetsLog.txt");
@@ -40,10 +46,11 @@ void MerkelBot::init()
     botAssets.setStandardOrderAmounts();
 
     // iterating through timestamp values until we reaches the end, so we are stopping at latestTimestamp
-    while (currentTime != latestTimestamp)
-    {
-        // run all operations related to current timestamp
-        processTimeframe();
+    for (int i = 0; i < allTimestamps.size() - 1; ++i)
+    {   
+        currentTime = allTimestamps[i];
+        // run all bot operations related to current timestamp: cancel orders, place asks/bids
+        processBotActions();
 
         // writing to assets log
         botAssetsLog << "Timestamp: " << currentTime << std::endl;
@@ -51,7 +58,18 @@ void MerkelBot::init()
         botAssetsLog << "========================= " << std::endl;
         botAssets.logAssets(botAssetsLog);
 
-        gotoNextTimeframe();
+        // match asks to bids and log sales
+        runMarketSales();
+
+        // transferring active user orders to next period
+        for (OrderBookEntry& order: fullOrderBook.activeUserOrders)
+        {
+            order.orderStatus = "carryover";
+            orders[allTimestamps[i+1]].push_back(order);
+        }
+
+        // empty the list of active user orders
+        fullOrderBook.activeUserOrders.clear();
 
         // writing to assets log
         botAssetsLog << "After processing sales: " << std::endl;
@@ -63,8 +81,8 @@ void MerkelBot::init()
         logSalesImpact(botAssetsLog);     
     } 
 
-    // process operations for last timestamp
-    processTimeframe();
+    // process bot operations for last timestamp
+    processBotActions();
     // writing to assets log
     botAssetsLog << "Timestamp: " << currentTime << std::endl;
     botAssets.logAssets(botAssetsLog);
@@ -73,16 +91,10 @@ void MerkelBot::init()
     botActiveOrdersLog.close();
     botAssetsLog.close();
     botSalesLog.close();
-
-    // stopping high resolution clock to measure program running time
-    auto stop = std::chrono::high_resolution_clock::now();
-    // extracting duration and logging to console
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-    std::cout << "MerkelBot executed successfully in " << duration.count() << " microseconds" << std::endl;
 }
 
 /** function to execute all actions, including bot decisions for current time*/
-void MerkelBot::processTimeframe()
+void MerkelBot::processBotActions()
 {
     // getting current market prices
     getMarketPrices();
@@ -91,7 +103,7 @@ void MerkelBot::processTimeframe()
 
     // only 1 data point available at the beginning and no price prediction is possible
     // checking if we moved beyond the initial timestamp
-    if (currentTime > earliestTimestamp) 
+    if (currentTime != allTimestamps[0]) 
     {
         // updating prediction for estimated prices in the next period
         updatePricePrediction();
@@ -105,7 +117,7 @@ void MerkelBot::processTimeframe()
     }
     
     // iterating through all live orders to record carryover orders to the logs
-    for (OrderBookEntry& order : fullOrderBook.ordersByTimestamp[currentTime])
+    for (OrderBookEntry& order : orders[currentTime])
     {
         if (order.username == "botuser" && order.orderStatus != "cancelled")
         {
@@ -120,7 +132,7 @@ std::vector<OrderBookEntry> MerkelBot::getLiveBidsForProduct(std::string const p
     // define empty vector to store relevant orders
     std::vector<OrderBookEntry> orders_sub;
     // iterate through the orders for current timestamp
-    for (OrderBookEntry& e : fullOrderBook.ordersByTimestamp[currentTime])
+    for (OrderBookEntry& e : orders[currentTime])
     {
         if (e.product == product && e.orderType == OrderBookType::bid)
         {
@@ -136,7 +148,7 @@ std::vector<OrderBookEntry> MerkelBot::getLiveAsksForProduct(std::string const p
     // define empty vector to store relevant orders
     std::vector<OrderBookEntry> orders_sub;
     // iterate through the orders for current timestamp
-    for (OrderBookEntry& e : fullOrderBook.ordersByTimestamp[currentTime])
+    for (OrderBookEntry& e : orders[currentTime])
     {
         if (e.product == product && e.orderType == OrderBookType::ask)
         {
@@ -154,10 +166,11 @@ void MerkelBot::getMarketPrices()
     std::vector<OrderBookEntry> product_ask_orders;
 
     // iterating through list of known products
-    for (std::string const& p : botProducts)
+    for (std::string const& p : allProducts)
     {
         // extracting bids and asks for current product
         std::vector<OrderBookEntry> product_bid_orders = getLiveBidsForProduct(p);
+        // std::cout << "Bids for product " << p << ": " << product_bid_orders.size() << std::endl; 
         std::vector<OrderBookEntry> product_ask_orders = getLiveAsksForProduct(p);
         
         // checking if we have at least an order
@@ -227,14 +240,14 @@ void MerkelBot::getMarketPrices()
     } // end for loop
 }
 
-/** move to the next timeframe */
-void MerkelBot::gotoNextTimeframe()
+/** executing and logging sales */
+void MerkelBot::runMarketSales()
 {
     // iterating through all known products
-    for (std::string& p : botProducts)
+    for (std::string& p : allProducts)
     {
         // matching asks to bids and generating sales for current time
-        std::vector<OrderBookEntry> sales = fullOrderBook.matchAsksToBids(fullOrderBook.ordersByTimestamp[currentTime], p, currentTime);
+        std::vector<OrderBookEntry> sales = fullOrderBook.matchAsksToBids(orders[currentTime], p, currentTime);
 
         // iterating through the list of sales
         for (OrderBookEntry& sale: sales)
@@ -247,15 +260,6 @@ void MerkelBot::gotoNextTimeframe()
             }
         }
     }
-
-    // storing next timeframe
-    std::string nextTime = fullOrderBook.getNextTime(currentTime, fullOrderBook.timestamps);
-
-    // transferring unfulfilled bot orders from current time to the next time
-    fullOrderBook.transferActiveOrders(currentTime, nextTime);
-
-    // updating current time
-    currentTime = nextTime;
 }
 
 /** function to estimate next likely value of a numerical array using linear regression*/
@@ -269,11 +273,11 @@ long double MerkelBot::linRegressionPrediction(std::vector<long double>& priceHi
 
     try
     {
-        // using 1 to n range for regression, assuming timesteps of equal distance
-        for (int i = 1; i <= n; ++i)
+        // taking at most the last 14 data points, assuming timesteps of equal distance
+        for (int i = std::max(n - 14, 1); i < n; ++i)
         {
             sumX += i;
-            sumY += priceHistory[i-1];
+            sumY += priceHistory[i];
         }
         meanX = sumX / n;
         meanY = sumY / n;
@@ -295,9 +299,8 @@ long double MerkelBot::linRegressionPrediction(std::vector<long double>& priceHi
         throw; // throw exception to the calling function
     }
 
-    // returning prediction by doubling the time interval, e.g. 
-    // if we have 5 data points, we predict price after 5 additional time frames
-    return intercept + coeff * (n + 10);
+    // returning prediction 5 intervals later
+    return intercept + coeff * (n + 5);
 }
 
 /** function to extract historical prices from a specific product*/
@@ -319,7 +322,7 @@ void MerkelBot::updatePricePrediction()
 {
    // vector to store historical prices for a product
    std::vector<long double> productPriceHistory;
-   for (std::string const& p : botProducts)
+   for (std::string const& p : allProducts)
    {
        try
        {
@@ -336,25 +339,29 @@ void MerkelBot::updatePricePrediction()
 /** analyze current market and place bot bids */ 
 void MerkelBot::placeBotBids()
 {
-    double  bidPrice, buyAmount, sellAmount;
-    for (std::string const& p : botProducts)
+    long double  bidPrice, buyAmount, sellAmount;
+    for (std::string const& p : allProducts)
     {
         std::vector<std::string> currs = CSVReader::tokenise(p, '/');
         
         // initializing bid price above current bidding, at min ask
-        bidPrice = avgCurrentPrices[p];
+        bidPrice = minAskPrices[p];
         // initialing amount with the standard order amount
         buyAmount = botAssets.standardOrderAmount[currs[0]];
         // calculate sell amount
         sellAmount = buyAmount * bidPrice;
 
-        // check if the price prediction is at least 0.1% higher than current market price
+        // using stringstream to avoid losing decimals when converting to string, applicable to DOGE/BTC
+        std::stringstream priceString;
+        priceString << bidPrice;
+
+        // check if the price prediction is higher than current market price
         // if we expect the market price to increase, we should buy at the lowest price we can get now
-        if (pricePrediction[p] > 1.001 * avgCurrentPrices[p] && sellAmount > 0)
+        if (pricePrediction[p] > avgCurrentPrices[p] && bidPrice > 0 && bidPrice < pricePrediction[p])
         {
             try
             {
-                OrderBookEntry obe = CSVReader::stringsToOBE(std::to_string(bidPrice), 
+                OrderBookEntry obe = CSVReader::stringsToOBE(priceString.str(), 
                                                              std::to_string(buyAmount), 
                                                              currentTime, 
                                                              p, 
@@ -365,7 +372,7 @@ void MerkelBot::placeBotBids()
                 if (botAssets.standardWallet.canFulfillOrder(obe))
                 {
                     // add order to order book
-                    fullOrderBook.insertOrder(obe);
+                    orders[currentTime].push_back(obe);
 
                     // move order amount for product to the reserved wallet to avoid placing uncovered bids/asks
                     botAssets.blockAmount(currs[1], sellAmount);
@@ -384,7 +391,7 @@ void MerkelBot::placeBotBids()
 void MerkelBot::placeBotAsks()
 {
     long double askPrice, buyAmount, sellAmount;
-    for (std::string const& p : botProducts)
+    for (std::string const& p : allProducts)
     {
         std::vector<std::string> currs = CSVReader::tokenise(p, '/');
 
@@ -393,19 +400,23 @@ void MerkelBot::placeBotAsks()
             continue;
         
         // initializing ask price below current ask, at max bid
-        askPrice = maxBidPrices[p];
+        askPrice = avgCurrentPrices[p];
         // initialing amount with the standard order amount
         sellAmount = botAssets.standardOrderAmount[currs[0]];
         // calculate buy amount
         buyAmount = sellAmount * askPrice;
 
+        // using stringstream to avoid losing decimals when converting to string, applicable to DOGE/BTC
+        std::stringstream priceString;
+        priceString << askPrice;
+
         // check if the price prediction is at leasr 0.1% lower than current market price
         // if we expect the market price to decrease, we should sell at the highest price we can get now
-        if (pricePrediction[p] < 0.999 * avgCurrentPrices[p])
+        if (pricePrediction[p] < 0.995 * avgCurrentPrices[p] && askPrice > pricePrediction[p])
         {
             try
             {
-                OrderBookEntry obe = CSVReader::stringsToOBE(std::to_string(askPrice), 
+                OrderBookEntry obe = CSVReader::stringsToOBE(priceString.str(), 
                                                              std::to_string(sellAmount), 
                                                              currentTime, 
                                                              p, 
@@ -416,7 +427,7 @@ void MerkelBot::placeBotAsks()
                 if (botAssets.standardWallet.canFulfillOrder(obe))
                 {
                     // add order to order book
-                    fullOrderBook.insertOrder(obe);
+                    orders[currentTime].push_back(obe);
 
                     // move order amount for product to the reserved wallet to avoid placing uncovered bids/asks
                     botAssets.blockAmount(currs[0], sellAmount);
@@ -435,35 +446,33 @@ void MerkelBot::placeBotAsks()
 void MerkelBot::cancelBotOrders()
 {
     std::vector<std::string> currs;
-    for (OrderBookEntry& order : fullOrderBook.ordersByTimestamp[currentTime])
+    for (OrderBookEntry& order : orders[currentTime])
     {
         if (order.orderStatus == "carryover" && order.username == "botuser")
         {
             if(order.orderType == OrderBookType::ask)
             {
                 // check order price vs. current market prices
-                // if the price is lower than bidding prices, we cancel the order
-                if (order.price < maxBidPrices[order.product])
+                // if the price is lower than bidding prices or we predict the price will increase, we cancel the order
+                if (order.price < maxBidPrices[order.product] | order.price < pricePrediction[order.product])
                 {
                     order.orderStatus = "cancelled";
                     currs = CSVReader::tokenise(order.product, '/');
                     botAssets.unblockAmount(currs[0], order.amount);
-                    // std::cout << timestamp << ": unblocked " << currs[0] << " " << order.amount;
-                    // std::cout << " related to an ask for " << currs[1] << " " << order.amount * order.price << std::endl;
+
                     logBotOrder(order, botCancelledOrdersLog);
                 }
             }
             if(order.orderType == OrderBookType::bid)
             {
                 // check order price vs. current market
-                // if price is higher than asking prices, we cancel the order
-                if (order.price > minAskPrices[order.product])
+                // if price is higher than asking prices or we predict the price will decrease, we cancel the order
+                if (order.price > minAskPrices[order.product] | order.price > pricePrediction[order.product])
                 {
                     order.orderStatus = "cancelled";
                     currs = CSVReader::tokenise(order.product, '/');
                     botAssets.unblockAmount(currs[1], order.amount * order.price);
-                    // std::cout << timestamp << ": unblocked " << currs[1] << " " << order.amount * order.price;
-                    // std::cout << " related to a bid for " << currs[0] << " " << order.amount << std::endl;
+
                     logBotOrder(order, botCancelledOrdersLog);
                 }
             }

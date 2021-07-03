@@ -1,18 +1,22 @@
 #include "CSVReader.h"
-#include <iostream>
-#include "OrderBookEntry.h"
-#include <fstream>
-#include <map>
 
 CSVReader::CSVReader()
 {
 
 }
 
-std::vector<OrderBookEntry> CSVReader::readCSV(std::string csvFilename)
+OrderBook CSVReader::readCSV(std::string csvFilename)
 {
-    // map of timestamps to vectors of all orders
-    std::vector<OrderBookEntry> entries;
+    
+    // OrderBook variable to store data from the CSV File
+    // This will return timestamps, products and a map of timestamps to order vectors
+    OrderBook ordersData;
+
+    // map of timestamps
+    std::map<std::string,bool> timestampsMap;
+
+    // map of products
+    std::map<std::string,bool> prodMap;
 
     std::ifstream csvFile{csvFilename};
     std::string line;
@@ -23,7 +27,12 @@ std::vector<OrderBookEntry> CSVReader::readCSV(std::string csvFilename)
             try 
             {
                 OrderBookEntry obe = stringsToOBE(tokenise(line, ','));
-                entries.push_back(obe);
+                ordersData.ordersByTimestamp[obe.timestamp].push_back(obe);
+
+                // add to map of known products
+                prodMap[obe.product] = true;
+                // add to map of known timestamps
+                timestampsMap[obe.timestamp] = true;
             }
             catch(const std::exception& e)
             {
@@ -32,9 +41,22 @@ std::vector<OrderBookEntry> CSVReader::readCSV(std::string csvFilename)
         }// end of while
     }
 
-    // std::cout << "CSVReader::readCSV read " << entries.size() << " entries" << std::endl;
-    return entries;
+    // flatten the map of timestamps to a vector of strings
+    for (auto const& e : timestampsMap)
+    {
+        ordersData.timestamps.push_back(e.first);
+    }
+
+    // flatten the map of products to a vector of strings
+    for (auto const& e : prodMap)
+    {
+        ordersData.products.push_back(e.first);
+    }
+
+    // return entries;
+    return ordersData;
 }
+
 std::vector<std::string> CSVReader::tokenise(std::string csvLine, char separator)
 {
     std::vector<std::string> tokens;
@@ -70,8 +92,8 @@ OrderBookEntry CSVReader::stringsToOBE(std::vector<std::string> tokens)
     }
     catch(const std::exception& e)
     {
-        std::cout << "CSVReader::stringsToOBE Bad float! " << tokens[3] << std::endl;
-        std::cout << "CSVReader::stringsToOBE Bad float! " << tokens[4] << std::endl;
+        //std::cout << "CSVReader::stringsToOBE Bad float! " << tokens[3] << std::endl;
+        //std::cout << "CSVReader::stringsToOBE Bad float! " << tokens[4] << std::endl;
         throw;
     }
     
