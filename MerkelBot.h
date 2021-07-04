@@ -28,24 +28,24 @@ class MerkelBot
         std::vector<OrderBookEntry> getLiveAsksForProduct(std::string const product);
 
         // map variables to store current market statistics
-        std::map<std::string, long double> maxBidPrices;
-        std::map<std::string, long double> minAskPrices;
-        std::map<std::string, long double> avgCurrentPrices;
+        std::map<std::string, double> maxBidPrices;
+        std::map<std::string, double> minAskPrices;
+        std::map<std::string, double> avgCurrentPrices;
 
         // a vector to store historical prices for all timestamps up to current time 
-        std::vector<std::map<std::string, long double> > avgHistoricalPrices;
+        std::vector<std::map<std::string, double> > avgHistoricalPrices;
 
         /** function to extract historical prices for a specific product*/
-        std::vector<long double> getHistoricalPricesByProduct(std::string const product);
+        std::vector<double> getHistoricalPricesByProduct(std::string const product);
 
         // map to store current price prediction for each product
-        std::map<std::string, long double> pricePrediction;
+        std::map<std::string, double> pricePrediction;
 
         // map to store impact of sales to assets
         std::map<std::string, double> salesImpactOnAssets;
 
         /** function to estimate next likely value of a numerical array using linear regression*/
-        static long double linRegressionPrediction(std::vector<long double>& priceHistory);
+        static double linRegressionPrediction(std::vector<double>& priceHistory);
 
         /** update price prediction based on the historical and the most recent market prices*/
         void updatePricePrediction();
@@ -57,7 +57,7 @@ class MerkelBot
         void processBotActions();
 
         /** executing and logging sales */
-        void runMarketSales();
+        void runMarketSales(int period);
 
         /** analyze current market and place bot bids */ 
         void placeBotBids();
@@ -69,7 +69,7 @@ class MerkelBot
         void cancelBotOrders();
 
         /** add bot order to the order log */
-        static void logBotOrder(OrderBookEntry& order, std::ofstream& logFile);
+        void logBotOrder(OrderBookEntry& order, std::ofstream& logFile);
 
         /** add sale to the sale log*/
         void logBotSale(OrderBookEntry& sale, std::ofstream& logFile);
@@ -84,8 +84,13 @@ class MerkelBot
         std::vector<std::string> allTimestamps;
         std::vector<std::string> allProducts;
 
-        std::map<std::string,std::vector<OrderBookEntry> > orders;
+        /** map of vectors to store orders by timestamp */
+        std::map<std::string,std::vector<OrderBookEntry>> orders;
+        /** map of vectors to store orders by product */
+        std::map<std::string,std::vector<OrderBookEntry>> ordersByProduct;
 
+        /** function to split orders by product*/
+        void splitDataByProduct(std::vector<OrderBookEntry>& orders);
         // class variables to store current time, earliest time and latest time for the order book
         std::string currentTime;
         std::string earliestTimestamp;
@@ -96,4 +101,7 @@ class MerkelBot
         std::ofstream botCancelledOrdersLog;
         std::ofstream botAssetsLog;
         std::ofstream botSalesLog;
+
+        // tracking id for the bot orders
+        int botOrderIDTracker = 1;
 };

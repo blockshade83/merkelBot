@@ -1,13 +1,14 @@
 #include "OrderBookEntry.h" 
 
-OrderBookEntry::OrderBookEntry(long double _price, 
+OrderBookEntry::OrderBookEntry(double _price, 
                                double _amount, 
                                std::string _timestamp, 
                                std::string _product, 
                                OrderBookType _orderType,
-                               long double _priceDifference,
+                               double _priceDifference,
                                std::string _username,
-                               std::string _orderStatus)
+                               std::string _orderStatus,
+                               std::string _orderID)
 : price(_price), 
   amount(_amount), 
   timestamp(_timestamp), 
@@ -15,7 +16,8 @@ OrderBookEntry::OrderBookEntry(long double _price,
   orderType(_orderType),
   priceDifference(_priceDifference),
   username(_username),
-  orderStatus(_orderStatus)
+  orderStatus(_orderStatus),
+  orderID(_orderID)
 {
 
 };

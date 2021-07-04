@@ -27,18 +27,22 @@ std::vector<OrderBookEntry> OrderBook::getOrders(std::vector<OrderBookEntry>& or
 }
 
 /** matching engine */
-std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::vector<OrderBookEntry>& currentOrders, 
+std::vector<std::vector<OrderBookEntry>> OrderBook::matchAsksToBids(std::vector<OrderBookEntry>& currentOrders, 
                                                        std::string product, 
                                                        std::string timestamp)
 {
     // starting high resolution clock to measure program running time
     auto start1 = std::chrono::high_resolution_clock::now();
 
+    // vector of vectors to return 2 things with one processing
+    std::vector<std::vector<OrderBookEntry>> output;
+        // vectors to store the 2 separate outputs
+    std::vector<OrderBookEntry> sales;
+    std::vector<OrderBookEntry> activeUserOrders;
+
     // extract all asks and bid for a specific product and timestamp
     std::vector<OrderBookEntry> asks = getOrders(currentOrders, OrderBookType::ask, product, timestamp);
     std::vector<OrderBookEntry> bids = getOrders(currentOrders, OrderBookType::bid, product, timestamp);
-
-    std::vector<OrderBookEntry> sales;
 
     // stopping high resolution clock to measure program running time
     auto stop1 = std::chrono::high_resolution_clock::now();
@@ -89,11 +93,13 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::vector<OrderBookEntr
                 {
                     sale.username = bid.username;
                     sale.orderType = OrderBookType::bidsale;
+                    sale.orderID = bid.orderID;
                 }
                 if (ask.username == "botuser")
                 {
                     sale.username = ask.username;
                     sale.orderType = OrderBookType::asksale;
+                    sale.orderID = ask.orderID;
                 }
 
                 if (bid.amount == ask.amount)
@@ -164,7 +170,9 @@ std::vector<OrderBookEntry> OrderBook::matchAsksToBids(std::vector<OrderBookEntr
     // std::cout << "Matching section of the function at " << timestamp << " and product " << product << " ran in " << duration3.count() << " microseconds" << std::endl;
 
     // uncomment the line below to output measurements to console
-    std::cout << "Total running time at " << timestamp << " and product " << product << ": " << duration1.count() + duration2.count() + duration3.count() << " microseconds" << std::endl;
+    // std::cout << "Total running time at " << timestamp << " and product " << product << ": " << duration1.count() + duration2.count() + duration3.count() << " microseconds" << std::endl;
 
-    return sales;
+    output.push_back(sales);
+    output.push_back(activeUserOrders);
+    return output;
 }

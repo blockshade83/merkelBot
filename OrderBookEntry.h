@@ -7,14 +7,15 @@ class OrderBookEntry
 {
 	public:
 
-		OrderBookEntry(long double _price, 
+		OrderBookEntry(double _price, 
 					   double _amount, 
 					   std::string _timestamp, 
 					   std::string _product, 
 					   OrderBookType _orderType,
-					   long double _priceDifference = 0,
+					   double _priceDifference = 0,
 					   std::string _username = "dataset",
-					   std::string _orderStatus = "initial");
+					   std::string _orderStatus = "initial",
+					   std::string _orderID = "");
 
 		static OrderBookType stringToOrderBookType(std::string s);
 
@@ -32,4 +33,5 @@ class OrderBookEntry
 		double priceDifference;
 		std::string username;
 		std::string orderStatus;
+		std::string orderID;
 };

@@ -16,15 +16,12 @@ class OrderBook
         /** matching engine, takes a vector of orders a product and a timestamps as inputs *
          * returns a list of orderbook entries representing executed sales*
          * also records unfulfilled bot orders to a vector of active orders*/
-        std::vector<OrderBookEntry> matchAsksToBids(std::vector<OrderBookEntry>& currentOrders, 
+        std::vector<std::vector<OrderBookEntry>> matchAsksToBids(std::vector<OrderBookEntry>& currentOrders, 
                                                     std::string product, 
                                                     std::string timestamp);
 
         /** map of timestamps to vectors of all orders */
         std::map<std::string,std::vector<OrderBookEntry> > ordersByTimestamp;
-
-        /** vector of order book entries to store all the unprocessed bot orders */
-        std::vector<OrderBookEntry> activeUserOrders;
 
         /** vector of strings to store timestamps */
         std::vector<std::string> timestamps;
